@@ -1,4 +1,4 @@
-// server.js - VERSÃO PRONTA PARA HOSPEDAGEM
+// server.js - VERSÃO FINAL CORRIGIDA
 
 const express = require('express');
 const http = require('http');
@@ -14,11 +14,12 @@ const app = express();
 const server = http.createServer(app);
 
 const PUSHPAY_API_KEY = "sua_chave_secreta_da_api_do_pushpay_aqui";
+const BASE_URL = 'https://whatsapp-backend-vott.onrender.com'; // ← URL BASE ADICIONADA
 
 // --- CONFIGURAÇÃO DO SERVIDOR ---
 app.use(cors());
 app.use(bodyParser.json());
-// Servindo APENAS a pasta de mídia (removido o build do frontend)
+// Servindo APENAS a pasta de mídia
 app.use(express.static(path.join(__dirname, 'media'))); 
 // -----------------------------------------
 
@@ -94,7 +95,8 @@ async function sendBotMessages(socket, stepKey) {
     else if (messageToSend.type === 'image_with_location') {
       const city = encodeURIComponent(userState.city);
       messageToSend.type = 'image';
-      messageToSend.content = `/generate-image-with-city?cidade=${city}`;
+      // CORREÇÃO AQUI ↓ - AGORA COM URL COMPLETA
+      messageToSend.content = `${BASE_URL}/generate-image-with-city?cidade=${city}`;
     }
     socket.emit('botMessage', messageToSend);
     socket.emit('botStatus', { status: 'online' });
@@ -147,8 +149,6 @@ io.on('connection', async (socket) => {
   });
   socket.on('disconnect', () => { console.log(`❌ Usuário desconectado: ${socket.id}`); delete userSessions[socket.id]; });
 });
-
-// REMOVIDA A ROTA DO FRONTEND - AGORA É BACKEND PURO!
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
