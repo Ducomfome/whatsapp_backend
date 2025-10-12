@@ -1,4 +1,4 @@
-// server.js - VERSÃO FINAL COM IPAPI.CO
+// server.js - VERSÃO FINAL COM IPGEOLOCATION.IO
 
 const express = require('express');
 const http = require('http');
@@ -119,8 +119,8 @@ io.on('connection', async (socket) => {
     
     console.log(`🌐 Tentando geolocalização para IP: ${finalIp}`);
     
-    // NOVA API - IPAPI.CO ↓
-    const response = await axios.get(`https://ipapi.co/${finalIp}/json/`);
+    // NOVA API - IPGEOLOCATION.IO ↓
+    const response = await axios.get(`https://api.ipgeolocation.io/ipgeo?apiKey=test&ip=${finalIp}`);
     
     if (response.data.city) {
       userState.city = response.data.city;
