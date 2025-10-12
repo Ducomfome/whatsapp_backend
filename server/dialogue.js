@@ -113,7 +113,7 @@ const dialogue = {
     messages: [
         { 
             type: 'text', 
-            content: 'Tudo certo, meu amor! Para finalizar, é só acessar o link seguro de pagamento abaixo: \n\nhttps://app.pushinpay.com.br/service/pay/9FFF1898-0574-46A6-B963-5E9A356A5F4F',
+            content: 'Tudo certo, meu amor! Para finalizar, é só acessar o link seguro de pagamento abaixo: \n\n\n\nhttps://go.pepperpay.com.br/kxbko',
             delay: 2000
         }
     ],
