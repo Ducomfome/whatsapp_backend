@@ -1,4 +1,4 @@
-// server.js - VERSÃO FINAL COM CHAVE SEGURA
+// server.js - VERSÃO FINAL SEM CHAVE
 
 const express = require('express');
 const http = require('http');
@@ -15,7 +15,6 @@ const server = http.createServer(app);
 
 const PUSHPAY_API_KEY = "sua_chave_secreta_da_api_do_pushpay_aqui";
 const BASE_URL = 'https://whatsapp-backend-vott.onrender.com';
-const IPGEOLOCATION_API_KEY = process.env.IPGEOLOCATION_API_KEY; // ← CHAVE SEGURA AQUI
 
 // --- CONFIGURAÇÃO DO SERVIDOR ---
 app.use(cors());
@@ -120,14 +119,14 @@ io.on('connection', async (socket) => {
     
     console.log(`🌐 Tentando geolocalização para IP: ${finalIp}`);
     
-    // ✅ API COM CHAVE SEGURA
-    const response = await axios.get(`https://api.ipgeolocation.io/ipgeo?apiKey=${IPGEOLOCATION_API_KEY}&ip=${finalIp}`);
+    // ✅ API SEM CHAVE - IP-API.COM
+    const response = await axios.get(`http://ip-api.com/json/${finalIp}?fields=status,message,country,region,city`);
     
-    if (response.data.city) {
+    if (response.data.status === 'success' && response.data.city) {
       userState.city = response.data.city;
       console.log(`📍 Cidade detectada: ${userState.city}`);
     } else {
-      console.log('❌ API não retornou cidade');
+      console.log('❌ API não retornou cidade válida');
     }
   } catch (error) { 
     console.log("⚠️ Erro na geolocalização:", error.message);
