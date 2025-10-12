@@ -1,4 +1,4 @@
-// server.js - VERSÃO FINAL COM GEOLOCALIZAÇÃO CORRIGIDA
+// server.js - VERSÃO FINAL COM IPAPI.CO
 
 const express = require('express');
 const http = require('http');
@@ -114,21 +114,19 @@ io.on('connection', async (socket) => {
   console.log(`✅ Usuário conectado: ${socket.id}`);
   const userState = { city: 'São Paulo', conversationStep: 'START' };
   try {
-    // CORREÇÃO DA GEOLOCALIZAÇÃO AQUI ↓
     const userIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
-    
-    // REMOVIDO O IP FIXO - AGORA USA SEMPRE O IP REAL
     const finalIp = userIp; 
     
     console.log(`🌐 Tentando geolocalização para IP: ${finalIp}`);
     
-    const response = await axios.get(`http://ip-api.com/json/${finalIp}`);
+    // NOVA API - IPAPI.CO ↓
+    const response = await axios.get(`https://ipapi.co/${finalIp}/json/`);
     
-    if (response.data.status === 'success' && response.data.city) {
+    if (response.data.city) {
       userState.city = response.data.city;
       console.log(`📍 Cidade detectada: ${userState.city}`);
     } else {
-      console.log('❌ API retornou status não sucesso');
+      console.log('❌ API não retornou cidade');
     }
   } catch (error) { 
     console.log("⚠️ Erro na geolocalização:", error.message);
