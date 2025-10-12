@@ -1,4 +1,4 @@
-// server.js - VERSÃO FINAL CORRIGIDA
+// server.js - VERSÃO FINAL COM GEOLOCALIZAÇÃO CORRIGIDA
 
 const express = require('express');
 const http = require('http');
@@ -14,12 +14,11 @@ const app = express();
 const server = http.createServer(app);
 
 const PUSHPAY_API_KEY = "sua_chave_secreta_da_api_do_pushpay_aqui";
-const BASE_URL = 'https://whatsapp-backend-vott.onrender.com'; // ← URL BASE ADICIONADA
+const BASE_URL = 'https://whatsapp-backend-vott.onrender.com';
 
 // --- CONFIGURAÇÃO DO SERVIDOR ---
 app.use(cors());
 app.use(bodyParser.json());
-// Servindo APENAS a pasta de mídia
 app.use(express.static(path.join(__dirname, 'media'))); 
 // -----------------------------------------
 
@@ -34,7 +33,6 @@ app.get('/generate-image-with-city', async (req, res) => {
     const image = await Jimp.read(imagePath);
     const textToPrint = `${city}`;
 
-    // Suas coordenadas finais com ponto de início fixo
     const finalX = 220; 
     const finalY = 45;
 
@@ -57,7 +55,7 @@ app.post('/create-payment', async (req, res) => {
   }
   try {
     const paymentData = { value: 1999, description: "Acesso ao Grupo VIP" };
-    const response = await axios.post('https://api.pushinpay.com.br/v1/pix/charges', paymentData, { // Link de exemplo
+    const response = await axios.post('https://api.pushinpay.com.br/v1/pix/charges', paymentData, {
       headers: { 'Authorization': `Bearer ${PUSHPAY_API_KEY}`, 'Content-Type': 'application/json' }
     });
     console.log("Pagamento criado com sucesso!");
@@ -95,7 +93,6 @@ async function sendBotMessages(socket, stepKey) {
     else if (messageToSend.type === 'image_with_location') {
       const city = encodeURIComponent(userState.city);
       messageToSend.type = 'image';
-      // CORREÇÃO AQUI ↓ - AGORA COM URL COMPLETA
       messageToSend.content = `${BASE_URL}/generate-image-with-city?cidade=${city}`;
     }
     socket.emit('botMessage', messageToSend);
@@ -117,16 +114,31 @@ io.on('connection', async (socket) => {
   console.log(`✅ Usuário conectado: ${socket.id}`);
   const userState = { city: 'São Paulo', conversationStep: 'START' };
   try {
+    // CORREÇÃO DA GEOLOCALIZAÇÃO AQUI ↓
     const userIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
-    const finalIp = (userIp === '::1' || userIp === '127.0.0.1') ? '177.68.128.0' : userIp;
+    
+    // REMOVIDO O IP FIXO - AGORA USA SEMPRE O IP REAL
+    const finalIp = userIp; 
+    
+    console.log(`🌐 Tentando geolocalização para IP: ${finalIp}`);
+    
     const response = await axios.get(`http://ip-api.com/json/${finalIp}`);
+    
     if (response.data.status === 'success' && response.data.city) {
       userState.city = response.data.city;
+      console.log(`📍 Cidade detectada: ${userState.city}`);
+    } else {
+      console.log('❌ API retornou status não sucesso');
     }
-  } catch (error) { console.log("⚠️ Erro na geolocalização, usando valor padrão."); }
-  console.log(`🌍 Localização definida para ${socket.id}: ${userState.city}`);
+  } catch (error) { 
+    console.log("⚠️ Erro na geolocalização:", error.message);
+    console.log("📍 Usando cidade padrão: São Paulo");
+  }
+  
+  console.log(`🌍 Localização final para ${socket.id}: ${userState.city}`);
   userSessions[socket.id] = userState;
   sendBotMessages(socket, userState.conversationStep);
+  
   socket.on('userMessage', (data) => {
     const userState = userSessions[socket.id];
     if (!userState) return;
@@ -147,7 +159,11 @@ io.on('connection', async (socket) => {
       sendBotMessages(socket, nextStepKey);
     }
   });
-  socket.on('disconnect', () => { console.log(`❌ Usuário desconectado: ${socket.id}`); delete userSessions[socket.id]; });
+  
+  socket.on('disconnect', () => { 
+    console.log(`❌ Usuário desconectado: ${socket.id}`); 
+    delete userSessions[socket.id]; 
+  });
 });
 
 const PORT = process.env.PORT || 3001;
