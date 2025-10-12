@@ -1,4 +1,4 @@
-// server.js - VERSÃO COMPLETA COM SUA CHAVE IPGEOLOCATION
+// server.js - VERSÃO FINAL COM CHAVE SEGURA
 
 const express = require('express');
 const http = require('http');
@@ -15,7 +15,7 @@ const server = http.createServer(app);
 
 const PUSHPAY_API_KEY = "sua_chave_secreta_da_api_do_pushpay_aqui";
 const BASE_URL = 'https://whatsapp-backend-vott.onrender.com';
-const IPGEOLOCATION_API_KEY = "77e79ecc061f4184b45e403c694cd0f6"; // ← SUA CHAVE AQUI
+const IPGEOLOCATION_API_KEY = process.env.IPGEOLOCATION_API_KEY; // ← CHAVE SEGURA AQUI
 
 // --- CONFIGURAÇÃO DO SERVIDOR ---
 app.use(cors());
@@ -120,7 +120,7 @@ io.on('connection', async (socket) => {
     
     console.log(`🌐 Tentando geolocalização para IP: ${finalIp}`);
     
-    // ✅ AGORA COM SUA CHAVE DO IPGEOLOCATION
+    // ✅ API COM CHAVE SEGURA
     const response = await axios.get(`https://api.ipgeolocation.io/ipgeo?apiKey=${IPGEOLOCATION_API_KEY}&ip=${finalIp}`);
     
     if (response.data.city) {
