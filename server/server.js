@@ -1,4 +1,4 @@
-// server.js - VERSÃO COM IP CORRIGIDO
+// server.js - VERSÃO COM MÚLTIPLAS APIS
 
 const express = require('express');
 const http = require('http');
@@ -110,28 +110,60 @@ async function sendBotMessages(socket, stepKey) {
   }
 }
 
+// ✅ FUNÇÃO QUE TENTA VÁRIAS APIS
+async function getGeolocation(ip) {
+  const apis = [
+    {
+      url: `https://ipwhois.app/json/${ip}`,
+      getCity: (data) => data.success ? data.city : null
+    },
+    {
+      url: `http://ip-api.com/json/${ip}?fields=status,message,country,region,city`,
+      getCity: (data) => data.status === 'success' ? data.city : null
+    },
+    {
+      url: `https://api.ipgeolocation.io/ipgeo?apiKey=77e79ecc061f4184b45e403c694cd0f6&ip=${ip}`,
+      getCity: (data) => data.city
+    }
+  ];
+  
+  for (let api of apis) {
+    try {
+      console.log(`🔄 Tentando API: ${api.url.split('/')[2]}`);
+      const response = await axios.get(api.url);
+      const city = api.getCity(response.data);
+      if (city) {
+        console.log(`✅ API funcionou! Cidade: ${city}`);
+        return city;
+      }
+    } catch (error) {
+      console.log(`❌ API falhou: ${error.message}`);
+      continue;
+    }
+  }
+  return null;
+}
+
 io.on('connection', async (socket) => {
   console.log(`✅ Usuário conectado: ${socket.id}`);
   const userState = { city: 'São Paulo', conversationStep: 'START' };
   try {
     const userIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
-    
-    // ✅ CORREÇÃO AQUI - PEGA SÓ O PRIMEIRO IP!
     const finalIp = userIp.split(',')[0].trim();
     
     console.log(`🌐 Tentando geolocalização para IP: ${finalIp}`);
     
-    const response = await axios.get(`https://ipwhois.app/json/${finalIp}`);
+    // ✅ TENTA VÁRIAS APIS
+    const detectedCity = await getGeolocation(finalIp);
     
-    if (response.data.success && response.data.city) {
-      userState.city = response.data.city;
+    if (detectedCity) {
+      userState.city = detectedCity;
       console.log(`📍 Cidade detectada: ${userState.city}`);
     } else {
-      console.log('❌ API não retornou cidade válida');
+      console.log('❌ Todas as APIs falharam');
     }
   } catch (error) { 
     console.log("⚠️ Erro na geolocalização:", error.message);
-    console.log("📍 Usando cidade padrão: São Paulo");
   }
   
   console.log(`🌍 Localização final para ${socket.id}: ${userState.city}`);
