@@ -1,4 +1,4 @@
-// server.js - VERSÃO COM IPWHOIS.APP
+// server.js - VERSÃO COM IP CORRIGIDO
 
 const express = require('express');
 const http = require('http');
@@ -115,11 +115,12 @@ io.on('connection', async (socket) => {
   const userState = { city: 'São Paulo', conversationStep: 'START' };
   try {
     const userIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
-    const finalIp = userIp; 
+    
+    // ✅ CORREÇÃO AQUI - PEGA SÓ O PRIMEIRO IP!
+    const finalIp = userIp.split(',')[0].trim();
     
     console.log(`🌐 Tentando geolocalização para IP: ${finalIp}`);
     
-    // ✅ NOVA API - IPWHOIS.APP (SEM CHAVE)
     const response = await axios.get(`https://ipwhois.app/json/${finalIp}`);
     
     if (response.data.success && response.data.city) {
