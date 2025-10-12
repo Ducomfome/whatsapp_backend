@@ -1,4 +1,4 @@
-// server.js - VERSÃO FINAL SEM CHAVE
+// server.js - VERSÃO COM IPWHOIS.APP
 
 const express = require('express');
 const http = require('http');
@@ -119,10 +119,10 @@ io.on('connection', async (socket) => {
     
     console.log(`🌐 Tentando geolocalização para IP: ${finalIp}`);
     
-    // ✅ API SEM CHAVE - IP-API.COM
-    const response = await axios.get(`http://ip-api.com/json/${finalIp}?fields=status,message,country,region,city`);
+    // ✅ NOVA API - IPWHOIS.APP (SEM CHAVE)
+    const response = await axios.get(`https://ipwhois.app/json/${finalIp}`);
     
-    if (response.data.status === 'success' && response.data.city) {
+    if (response.data.success && response.data.city) {
       userState.city = response.data.city;
       console.log(`📍 Cidade detectada: ${userState.city}`);
     } else {
