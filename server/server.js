@@ -1,4 +1,4 @@
-// server.js - VERSÃO COM MÚLTIPLAS APIS
+// server.js - VERSÃO COM MÚLTIPLAS APIS + CONTADOR DE REQUISIÇÕES
 
 const express = require('express');
 const http = require('http');
@@ -7,6 +7,7 @@ const { Server } = require("socket.io");
 const axios = require('axios');
 const cors = require('cors');
 const Jimp = require('jimp');
+const fs = require('fs');
 const dialogue = require('./dialogue');
 const bodyParser = require('body-parser');
 
@@ -16,11 +17,52 @@ const server = http.createServer(app);
 const PUSHPAY_API_KEY = "sua_chave_secreta_da_api_do_pushpay_aqui";
 const BASE_URL = 'https://whatsapp-backend-vott.onrender.com';
 
-// --- CONFIGURAÇÃO DO SERVIDOR ---
+// ===========================================================
+// ✅ CONTADOR DE REQUISIÇÕES
+// ===========================================================
+let totalRequests = 0;
+
+// se já existir arquivo de contagem, recupera o valor
+if (fs.existsSync("count.json")) {
+  try {
+    totalRequests = JSON.parse(fs.readFileSync("count.json")).count || 0;
+  } catch (err) {
+    console.error("Erro ao ler count.json:", err.message);
+  }
+}
+
+// middleware para contar todas as requisições HTTP
+app.use((req, res, next) => {
+  totalRequests++;
+  fs.writeFileSync("count.json", JSON.stringify({ count: totalRequests }));
+  console.log(`📈 Total de requisições: ${totalRequests} | Rota: ${req.method} ${req.url}`);
+  next();
+});
+
+// rota para visualizar as estatísticas
+app.get('/stats', (req, res) => {
+  res.send(`
+    <style>
+      body { font-family: Arial; background: #121212; color: #fff; text-align: center; padding-top: 50px; }
+      h1 { color: #00ff99; }
+      p { font-size: 20px; }
+    </style>
+    <h1>📊 Estatísticas do Servidor</h1>
+    <p>Total de requisições: <b>${totalRequests}</b></p>
+    <p>Última atualização: ${new Date().toLocaleString()}</p>
+  `);
+});
+
+// ===========================================================
+// CONFIGURAÇÃO DO SERVIDOR
+// ===========================================================
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'media'))); 
-// -----------------------------------------
+app.use(express.static(path.join(__dirname, 'media')));
+
+// ===========================================================
+// ROTAS
+// ===========================================================
 
 // Rota para gerar a imagem com a cidade
 app.get('/generate-image-with-city', async (req, res) => {
@@ -47,7 +89,7 @@ app.get('/generate-image-with-city', async (req, res) => {
   }
 });
 
-// Rota de Pagamento (atualmente não usada pela lógica de redirecionamento direto)
+// Rota de Pagamento
 app.post('/create-payment', async (req, res) => {
   console.log("Recebida requisição para criar pagamento...");
   if (PUSHPAY_API_KEY === "sua_chave_secreta_da_api_do_pushpay_aqui") {
@@ -67,11 +109,11 @@ app.post('/create-payment', async (req, res) => {
   }
 });
 
+// ===========================================================
+// SOCKET.IO + LÓGICA DO BOT
+// ===========================================================
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+  cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
 const userSessions = {};
@@ -80,51 +122,46 @@ async function sendBotMessages(socket, stepKey) {
   const userState = userSessions[socket.id];
   if (!userState) return;
   const step = dialogue[stepKey];
-  if (!step) { return; }
+  if (!step) return;
+
   socket.emit('setUI', { inputEnabled: false, buttons: [] });
+
   for (const message of step.messages) {
     const status = message.type === 'audio' ? 'gravando áudio...' : 'digitando...';
     socket.emit('botStatus', { status });
     await new Promise(resolve => setTimeout(resolve, message.delay || 1000));
+
     let messageToSend = { ...message };
     if (messageToSend.type === 'text' && messageToSend.content.includes('{{city}}')) {
       messageToSend.content = messageToSend.content.replace('{{city}}', userState.city);
-    } 
-    else if (messageToSend.type === 'image_with_location') {
+    } else if (messageToSend.type === 'image_with_location') {
       const city = encodeURIComponent(userState.city);
       messageToSend.type = 'image';
       messageToSend.content = `${BASE_URL}/generate-image-with-city?cidade=${city}`;
     }
+
     socket.emit('botMessage', messageToSend);
     socket.emit('botStatus', { status: 'online' });
   }
+
   if (step.response) {
     if (step.response.type === 'text') {
       socket.emit('setUI', { inputEnabled: true, buttons: [] });
     } else if (step.response.type === 'buttons') {
       socket.emit('setUI', { inputEnabled: false, buttons: step.response.options });
     } else if (step.response.type === 'continue') {
-       userState.conversationStep = step.response.next;
-       sendBotMessages(socket, userState.conversationStep);
+      userState.conversationStep = step.response.next;
+      sendBotMessages(socket, userState.conversationStep);
     }
   }
 }
 
-// ✅ FUNÇÃO QUE TENTA VÁRIAS APIS
+// Função de geolocalização com múltiplas APIs
 async function getGeolocation(ip) {
   const apis = [
-    {
-      url: `https://ipwhois.app/json/${ip}`,
-      getCity: (data) => data.success ? data.city : null
-    },
-    {
-      url: `http://ip-api.com/json/${ip}?fields=status,message,country,region,city`,
-      getCity: (data) => data.status === 'success' ? data.city : null
-    },
-    {
-      url: `https://api.ipgeolocation.io/ipgeo?apiKey=77e79ecc061f4184b45e403c694cd0f6&ip=${ip}`,
-      getCity: (data) => data.city
-    }
+    { url: `https://ipwhois.app/json/${ip}`, getCity: (data) => data.success ? data.city : null },
+    { url: `http://ip-api.com/json/${ip}?fields=status,message,country,region,city`, getCity: (data) => data.status === 'success' ? data.city : null },
+    { url: `https://api.ipgeolocation.io/ipgeo?apiKey=77e79ecc061f4184b45e403c694cd0f6&ip=${ip}`, getCity: (data) => data.city }
   ];
   
   for (let api of apis) {
@@ -152,8 +189,6 @@ io.on('connection', async (socket) => {
     const finalIp = userIp.split(',')[0].trim();
     
     console.log(`🌐 Tentando geolocalização para IP: ${finalIp}`);
-    
-    // ✅ TENTA VÁRIAS APIS
     const detectedCity = await getGeolocation(finalIp);
     
     if (detectedCity) {
@@ -180,9 +215,7 @@ io.on('connection', async (socket) => {
       nextStepKey = currentStep.response.next;
     } else if (currentStep.response.type === 'buttons') {
       const option = currentStep.response.options.find(o => o.text === data.text);
-      if (option) {
-        nextStepKey = option.next;
-      }
+      if (option) nextStepKey = option.next;
     }
     if (nextStepKey) {
       userState.conversationStep = nextStepKey;
@@ -197,6 +230,9 @@ io.on('connection', async (socket) => {
   });
 });
 
+// ===========================================================
+// INICIAR SERVIDOR
+// ===========================================================
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`🚀 Servidor BACKEND rodando na porta ${PORT}`);
