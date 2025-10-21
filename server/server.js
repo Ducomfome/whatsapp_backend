@@ -1,4 +1,4 @@
-// server.js - VERSÃO FINAL CORRIGIDA
+// server.js - VERSÃO COM MÚLTIPLAS APIS DE GEOLOCALIZAÇÃO
 
 const express = require('express');
 const http = require('http');
@@ -19,8 +19,8 @@ const BASE_URL = 'https://whatsapp-backend-vott.onrender.com'; // ← URL DO SEU
 // --- CONFIGURAÇÃO DO SERVIDOR ---
 app.use(cors());
 app.use(bodyParser.json());
-// Servindo APENAS a pasta de mídia (removido o build do frontend)
-app.use(express.static(path.join(__dirname, 'media'))); 
+// Servindo APENAS a pasta de mídia
+app.use(express.static(path.join(__dirname, 'media')));
 // -----------------------------------------
 
 // Rota para gerar a imagem com a cidade
@@ -29,17 +29,16 @@ app.get('/generate-image-with-city', async (req, res) => {
     const city = req.query.cidade || 'Sua Cidade';
     const imagePath = path.join(__dirname, 'media', 'generated-image-1.png');
     const fontPath = path.join(__dirname, 'media', 'fonts', 'open-sans-64-black.fnt');
-    
+
     const font = await Jimp.loadFont(fontPath);
     const image = await Jimp.read(imagePath);
     const textToPrint = `${city}`;
 
-    // Suas coordenadas finais com ponto de início fixo
-    const finalX = 220; 
+    const finalX = 220;
     const finalY = 45;
 
     image.print(font, finalX, finalY, { text: textToPrint, alignmentX: Jimp.HORIZONTAL_ALIGN_LEFT }, image.bitmap.width, image.bitmap.height);
-    
+
     const buffer = await image.getBufferAsync(Jimp.MIME_PNG);
     res.set('Content-Type', Jimp.MIME_PNG);
     res.send(buffer);
@@ -49,7 +48,7 @@ app.get('/generate-image-with-city', async (req, res) => {
   }
 });
 
-// Rota de Pagamento (atualmente não usada pela lógica de redirecionamento direto)
+// Rota de Pagamento
 app.post('/create-payment', async (req, res) => {
   console.log("Recebida requisição para criar pagamento...");
   if (PUSHPAY_API_KEY === "sua_chave_secreta_da_api_do_pushpay_aqui") {
@@ -78,6 +77,50 @@ const io = new Server(server, {
 
 const userSessions = {};
 
+// --- NOVA FUNÇÃO DE GEOLOCALIZAÇÃO ---
+async function getGeolocation(ip) {
+  console.log(`🌐 Testando geolocalização para IP: ${ip}`);
+
+  const apis = [
+    {
+      name: 'ipwhois.app',
+      url: `https://ipwhois.app/json/${ip}`,
+      getCity: (data) => data.success ? data.city : null
+    },
+    {
+      name: 'ip-api.com',
+      url: `http://ip-api.com/json/${ip}?fields=status,message,country,region,city`,
+      getCity: (data) => data.status === 'success' ? data.city : null
+    },
+    {
+      name: 'ipapi.co',
+      url: `https://ipapi.co/${ip}/json/`,
+      getCity: (data) => data.city
+    }
+  ];
+
+  for (let api of apis) {
+    try {
+      console.log(`🔄 Tentando ${api.name}...`);
+      const response = await axios.get(api.url);
+      const city = api.getCity(response.data);
+
+      if (city) {
+        console.log(`✅ ${api.name} funcionou! Cidade: ${city}`);
+        return city;
+      } else {
+        console.log(`❌ ${api.name} não retornou cidade`);
+      }
+    } catch (error) {
+      console.log(`❌ ${api.name} falhou: ${error.message}`);
+    }
+  }
+
+  console.log('❌ Todas as APIs de geolocalização falharam');
+  return null;
+}
+// ------------------------------------------
+
 async function sendBotMessages(socket, stepKey) {
   const userState = userSessions[socket.id];
   if (!userState) return;
@@ -91,11 +134,10 @@ async function sendBotMessages(socket, stepKey) {
     let messageToSend = { ...message };
     if (messageToSend.type === 'text' && messageToSend.content.includes('{{city}}')) {
       messageToSend.content = messageToSend.content.replace('{{city}}', userState.city);
-    } 
+    }
     else if (messageToSend.type === 'image_with_location') {
       const city = encodeURIComponent(userState.city);
       messageToSend.type = 'image';
-      // 🔥 CORREÇÃO AQUI - URL COMPLETA para as imagens
       messageToSend.content = `${BASE_URL}/generate-image-with-city?cidade=${city}`;
     }
     socket.emit('botMessage', messageToSend);
@@ -107,41 +149,33 @@ async function sendBotMessages(socket, stepKey) {
     } else if (step.response.type === 'buttons') {
       socket.emit('setUI', { inputEnabled: false, buttons: step.response.options });
     } else if (step.response.type === 'continue') {
-       userState.conversationStep = step.response.next;
-       sendBotMessages(socket, userState.conversationStep);
+      userState.conversationStep = step.response.next;
+      sendBotMessages(socket, userState.conversationStep);
     }
   }
 }
 
 io.on('connection', async (socket) => {
   console.log(`✅ Usuário conectado: ${socket.id}`);
-  const userState = { city: 'São Paulo', conversationStep: 'START' };
-  try {
-    const userIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
-    
-    // 🔥 CORREÇÃO AQUI - PEGA SÓ O PRIMEIRO IP (evita múltiplos IPs)
-    const finalIp = userIp.split(',')[0].trim();
-    
-    console.log(`🌐 Tentando geolocalização para IP: ${finalIp}`);
-    
-    // API QUE FUNCIONOU - IPWHOIS.APP
-    const response = await axios.get(`https://ipwhois.app/json/${finalIp}`);
-    
-    if (response.data.success && response.data.city) {
-      userState.city = response.data.city;
-      console.log(`📍 Cidade detectada: ${userState.city}`);
-    } else {
-      console.log('❌ API não retornou cidade válida');
-    }
-  } catch (error) { 
-    console.log("⚠️ Erro na geolocalização:", error.message);
-    console.log("📍 Usando cidade padrão: São Paulo");
+  const userState = { city: 'São Paulo', conversationStep: 'START' }; // Cidade padrão
+
+  const userIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+  const finalIp = userIp.split(',')[0].trim();
+
+  // --- LÓGICA DE GEOLOCALIZAÇÃO ATUALIZADA ---
+  const detectedCity = await getGeolocation(finalIp);
+  if (detectedCity) {
+    userState.city = detectedCity;
+    console.log(`📍 Cidade final detectada: ${userState.city}`);
+  } else {
+    console.log(`📍 Usando cidade padrão: São Paulo`);
   }
-  
+  // --------------------------------------------
+
   console.log(`🌍 Localização final para ${socket.id}: ${userState.city}`);
   userSessions[socket.id] = userState;
   sendBotMessages(socket, userState.conversationStep);
-  
+
   socket.on('userMessage', (data) => {
     const userState = userSessions[socket.id];
     if (!userState) return;
@@ -162,14 +196,13 @@ io.on('connection', async (socket) => {
       sendBotMessages(socket, nextStepKey);
     }
   });
-  
-  socket.on('disconnect', () => { 
-    console.log(`❌ Usuário desconectado: ${socket.id}`); 
-    delete userSessions[socket.id]; 
+
+  socket.on('disconnect', () => {
+    console.log(`❌ Usuário desconectado: ${socket.id}`);
+    delete userSessions[socket.id];
   });
 });
 
-// REMOVIDA A ROTA DO FRONTEND - AGORA É BACKEND PURO!
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`🚀 Servidor BACKEND rodando na porta ${PORT}`);
