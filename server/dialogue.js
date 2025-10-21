@@ -1,6 +1,6 @@
-// dialogue.js - VERSÃO ORIGINAL
+// dialogue.js - VERSÃO FINAL CORRIGIDA
 
-const BASE_URL = 'https://whatsapp-backend-vott.onrender.com';
+const BASE_URL = 'https://whatsapp-backend-vott.onrender.com'; // ← URL DO SEU BACKEND
 
 const dialogue = {
   START: {
