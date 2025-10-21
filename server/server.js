@@ -1,4 +1,4 @@
-// server.js - VERSÃO ORIGINAL
+// server.js - VERSÃO FINAL CORRIGIDA
 
 const express = require('express');
 const http = require('http');
@@ -14,10 +14,12 @@ const app = express();
 const server = http.createServer(app);
 
 const PUSHPAY_API_KEY = "sua_chave_secreta_da_api_do_pushpay_aqui";
+const BASE_URL = 'https://whatsapp-backend-vott.onrender.com'; // ← URL DO SEU BACKEND
 
 // --- CONFIGURAÇÃO DO SERVIDOR ---
 app.use(cors());
 app.use(bodyParser.json());
+// Servindo APENAS a pasta de mídia (removido o build do frontend)
 app.use(express.static(path.join(__dirname, 'media'))); 
 // -----------------------------------------
 
@@ -32,6 +34,7 @@ app.get('/generate-image-with-city', async (req, res) => {
     const image = await Jimp.read(imagePath);
     const textToPrint = `${city}`;
 
+    // Suas coordenadas finais com ponto de início fixo
     const finalX = 220; 
     const finalY = 45;
 
@@ -92,7 +95,8 @@ async function sendBotMessages(socket, stepKey) {
     else if (messageToSend.type === 'image_with_location') {
       const city = encodeURIComponent(userState.city);
       messageToSend.type = 'image';
-      messageToSend.content = `/generate-image-with-city?cidade=${city}`;
+      // 🔥 CORREÇÃO AQUI - URL COMPLETA para as imagens
+      messageToSend.content = `${BASE_URL}/generate-image-with-city?cidade=${city}`;
     }
     socket.emit('botMessage', messageToSend);
     socket.emit('botStatus', { status: 'online' });
@@ -114,10 +118,13 @@ io.on('connection', async (socket) => {
   const userState = { city: 'São Paulo', conversationStep: 'START' };
   try {
     const userIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+    
+    // 🔥 CORREÇÃO AQUI - PEGA SÓ O PRIMEIRO IP (evita múltiplos IPs)
     const finalIp = userIp.split(',')[0].trim();
     
     console.log(`🌐 Tentando geolocalização para IP: ${finalIp}`);
     
+    // API QUE FUNCIONOU - IPWHOIS.APP
     const response = await axios.get(`https://ipwhois.app/json/${finalIp}`);
     
     if (response.data.success && response.data.city) {
@@ -162,6 +169,7 @@ io.on('connection', async (socket) => {
   });
 });
 
+// REMOVIDA A ROTA DO FRONTEND - AGORA É BACKEND PURO!
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`🚀 Servidor BACKEND rodando na porta ${PORT}`);
