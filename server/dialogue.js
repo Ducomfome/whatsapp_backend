@@ -1,15 +1,12 @@
-// dialogue.js - VERSÃO FINAL COM REDIRECIONAMENTO DIRETO PARA WHATSAPP
+// dialogue.js - VERSÃO FINAL COM PAYLOAD
 
-const BASE_URL = 'https://whatsapp-backend-vott.onrender.com'; // ← URL DO SEU BACKEND
+const BASE_URL = 'https://whatsapp-backend-vott.onrender.com';
 
 const dialogue = {
   START: {
-    messages: [
-      { type: 'audio', content: BASE_URL + '/audios/audio01.mp3', delay: 2000 }
-    ],
+    messages: [ { type: 'audio', content: BASE_URL + '/audios/audio01.mp3', delay: 2000 } ],
     response: { type: 'text', next: 'AWAITING_CITY' }
   },
-
   AWAITING_CITY: {
     messages: [
       { type: 'audio', content: BASE_URL + '/audios/audio02.mp3', delay: 5000 },
@@ -19,7 +16,6 @@ const dialogue = {
     ],
     response: { type: 'text', next: 'AWAITING_ROMANCE_CHOICE' }
   },
-
   AWAITING_ROMANCE_CHOICE: {
     messages: [
       { type: 'audio', content: BASE_URL + '/audios/audio03.mp3', delay: 5000 },
@@ -28,45 +24,30 @@ const dialogue = {
     response: {
       type: 'buttons',
       options: [
-        { text: "Sou mais safado", next: 'NAUGHTY_PATH' },
-        { text: "Sou mais carinhoso", next: 'CARING_PATH' }
+        { text: "Sou mais safado", payload: "SELECT_NAUGHTY", next: 'NAUGHTY_PATH' },
+        { text: "Sou mais carinhoso", payload: "SELECT_CARING", next: 'CARING_PATH' }
       ]
     }
   },
-
   NAUGHTY_PATH: {
-    messages: [
-      { type: 'audio', content: BASE_URL + '/audios/audio05.mp3', delay: 2000 }
-    ],
+    messages: [ { type: 'audio', content: BASE_URL + '/audios/audio05.mp3', delay: 2000 } ],
     response: { type: 'continue', next: 'POST_CHOICE_AUDIO' }
   },
-
   CARING_PATH: {
-    messages: [
-      { type: 'audio', content: BASE_URL + '/audios/audio06.mp3', delay: 5000 }
-    ],
+    messages: [ { type: 'audio', content: BASE_URL + '/audios/audio06.mp3', delay: 5000 } ],
     response: { type: 'continue', next: 'POST_CHOICE_AUDIO' }
   },
-
   POST_CHOICE_AUDIO: {
-    messages: [
-      { type: 'audio', content: BASE_URL + '/audios/audio07.mp3', delay: 5000 }
-    ],
+    messages: [ { type: 'audio', content: BASE_URL + '/audios/audio07.mp3', delay: 5000 } ],
     response: { type: 'continue', next: 'AWAITING_CONFIRM_JOIN' }
   },
-
   AWAITING_CONFIRM_JOIN: {
-    messages: [
-      { type: 'audio', content: BASE_URL + '/audios/audio08.mp3', delay: 2500 }
-    ],
+    messages: [ { type: 'audio', content: BASE_URL + '/audios/audio08.mp3', delay: 2500 } ],
     response: {
       type: 'buttons',
-      options: [
-        { text: "Entro sim meu amor ❤️", next: 'AWAITING_NO_OBJECTION' }
-      ]
+      options: [ { text: "Entro sim meu amor ❤️", payload: "CONFIRM_JOIN", next: 'AWAITING_NO_OBJECTION' } ]
     }
   },
-
   AWAITING_NO_OBJECTION: {
     messages: [
       { type: 'audio', content: BASE_URL + '/audios/audio09.mp3', delay: 6000 },
@@ -80,12 +61,9 @@ const dialogue = {
     ],
     response: {
       type: 'buttons',
-      options: [
-        { text: "Combinado❤️", next: 'AWAITING_COMBINED' }
-      ]
+      options: [ { text: "Combinado❤️", payload: "CONFIRM_COMBINED", next: 'AWAITING_COMBINED' } ]
     }
   },
-
   AWAITING_COMBINED: {
     messages: [
       { type: 'audio', content: BASE_URL + '/audios/audio15.mp3', delay: 2000 },
@@ -93,12 +71,9 @@ const dialogue = {
     ],
     response: {
       type: 'buttons',
-      options: [
-        { text: "Entendi meu amor❤️", next: 'AWAITING_ENTER_CLUB' }
-      ]
+      options: [ { text: "Entendi meu amor❤️", payload: "CONFIRM_UNDERSTOOD", next: 'AWAITING_ENTER_CLUB' } ]
     }
   },
-
   AWAITING_ENTER_CLUB: {
     messages: [
       { type: 'audio', content: BASE_URL + '/audios/audio17.mp3', delay: 6000 },
@@ -114,12 +89,9 @@ const dialogue = {
     ],
     response: {
       type: 'buttons',
-      options: [
-        { text: "ENTRAR NO CLUBE SECRETO 🔥", next: 'AWAITING_WANT_TO_ENTER' }
-      ]
+      options: [ { text: "ENTRAR NO CLUBE SECRETO 🔥", payload: "ENTER_CLUB", next: 'AWAITING_WANT_TO_ENTER' } ]
     }
   },
-
   AWAITING_WANT_TO_ENTER: {
     messages: [
       { type: 'text', content: 'Eu aposto que você vai adorar amor... não vai se arrepender 😈😏', delay: 2500 },
@@ -129,13 +101,9 @@ const dialogue = {
     ],
     response: {
       type: 'buttons',
-      options: [
-        { text: "QUERO ENTRAR ❤️", next: 'OPEN_WHATSAPP' }
-      ]
+      options: [ { text: "QUERO ENTRAR ❤️", payload: "FINAL_CONFIRM_ENTRY", next: 'OPEN_WHATSAPP' } ]
     }
   },
-
-  // 🔥 AQUI ESTÁ O NOVO BLOCO QUE ABRE DIRETO O WHATSAPP
   OPEN_WHATSAPP: {
     action: {
       type: 'redirect',
