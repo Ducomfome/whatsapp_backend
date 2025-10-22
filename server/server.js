@@ -35,7 +35,7 @@ app.get('/generate-image-with-city', async (req, res) => {
     const textToPrint = `${city}`;
 
     const finalX = 198;
-    const finalY = 115;
+    const finalY = 125;
 
     image.print(font, finalX, finalY, { text: textToPrint, alignmentX: Jimp.HORIZONTAL_ALIGN_LEFT }, image.bitmap.width, image.bitmap.height);
 
