@@ -1,4 +1,4 @@
-// server.js - VERSÃO COM MÚLTIPLAS APIS DE GEOLOCALIZAÇÃO
+// server.js - VERSÃO COMPLETA E CORRIGIDA
 
 const express = require('express');
 const http = require('http');
@@ -14,12 +14,11 @@ const app = express();
 const server = http.createServer(app);
 
 const PUSHPAY_API_KEY = "sua_chave_secreta_da_api_do_pushpay_aqui";
-const BASE_URL = 'https://whatsapp-backend-vott.onrender.com'; // ← URL DO SEU BACKEND
+const BASE_URL = 'https://whatsapp-backend-vott.onrender.com';
 
 // --- CONFIGURAÇÃO DO SERVIDOR ---
 app.use(cors());
 app.use(bodyParser.json());
-// Servindo APENAS a pasta de mídia
 app.use(express.static(path.join(__dirname, 'media')));
 // -----------------------------------------
 
@@ -77,34 +76,18 @@ const io = new Server(server, {
 
 const userSessions = {};
 
-// --- NOVA FUNÇÃO DE GEOLOCALIZAÇÃO ---
 async function getGeolocation(ip) {
   console.log(`🌐 Testando geolocalização para IP: ${ip}`);
-
   const apis = [
-    {
-      name: 'ipwhois.app',
-      url: `https://ipwhois.app/json/${ip}`,
-      getCity: (data) => data.success ? data.city : null
-    },
-    {
-      name: 'ip-api.com',
-      url: `http://ip-api.com/json/${ip}?fields=status,message,country,region,city`,
-      getCity: (data) => data.status === 'success' ? data.city : null
-    },
-    {
-      name: 'ipapi.co',
-      url: `https://ipapi.co/${ip}/json/`,
-      getCity: (data) => data.city
-    }
+    { name: 'ipwhois.app', url: `https://ipwhois.app/json/${ip}`, getCity: (data) => data.success ? data.city : null },
+    { name: 'ip-api.com', url: `http://ip-api.com/json/${ip}?fields=status,message,country,region,city`, getCity: (data) => data.status === 'success' ? data.city : null },
+    { name: 'ipapi.co', url: `https://ipapi.co/${ip}/json/`, getCity: (data) => data.city }
   ];
-
   for (let api of apis) {
     try {
       console.log(`🔄 Tentando ${api.name}...`);
       const response = await axios.get(api.url);
       const city = api.getCity(response.data);
-
       if (city) {
         console.log(`✅ ${api.name} funcionou! Cidade: ${city}`);
         return city;
@@ -115,17 +98,26 @@ async function getGeolocation(ip) {
       console.log(`❌ ${api.name} falhou: ${error.message}`);
     }
   }
-
   console.log('❌ Todas as APIs de geolocalização falharam');
   return null;
 }
-// ------------------------------------------
 
+// ===================================
+// FUNÇÃO sendBotMessages ATUALIZADA
+// ===================================
 async function sendBotMessages(socket, stepKey) {
   const userState = userSessions[socket.id];
   if (!userState) return;
   const step = dialogue[stepKey];
   if (!step) { return; }
+
+  // AQUI ESTÁ A MUDANÇA: Verifica se o passo é uma ação de redirecionar
+  if (step.action && step.action.type === 'redirect') {
+    console.log(`🚀 Executando ação de redirecionamento para: ${step.action.url}`);
+    socket.emit('redirectToURL', { url: step.action.url }); // Envia o comando para o frontend
+    return; // Para a execução, pois não há mensagens para enviar
+  }
+
   socket.emit('setUI', { inputEnabled: false, buttons: [] });
   for (const message of step.messages) {
     const status = message.type === 'audio' ? 'gravando áudio...' : 'digitando...';
@@ -157,12 +149,9 @@ async function sendBotMessages(socket, stepKey) {
 
 io.on('connection', async (socket) => {
   console.log(`✅ Usuário conectado: ${socket.id}`);
-  const userState = { city: 'São Paulo', conversationStep: 'START' }; // Cidade padrão
-
+  const userState = { city: 'São Paulo', conversationStep: 'START' };
   const userIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
   const finalIp = userIp.split(',')[0].trim();
-
-  // --- LÓGICA DE GEOLOCALIZAÇÃO ATUALIZADA ---
   const detectedCity = await getGeolocation(finalIp);
   if (detectedCity) {
     userState.city = detectedCity;
@@ -170,9 +159,6 @@ io.on('connection', async (socket) => {
   } else {
     console.log(`📍 Usando cidade padrão: São Paulo`);
   }
-  // --------------------------------------------
-
-  console.log(`🌍 Localização final para ${socket.id}: ${userState.city}`);
   userSessions[socket.id] = userState;
   sendBotMessages(socket, userState.conversationStep);
 
