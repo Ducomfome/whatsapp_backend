@@ -107,7 +107,7 @@ const dialogue = {
   OPEN_WHATSAPP: {
     action: {
       type: 'redirect',
-      url: 'https://wa.me/5592988238179?text=teste'
+      url: 'https://wa.me/5592988238179?text=Oi!%20Quero%20entrar%20no%20clube%20secreto!'
     }
   }
 };
