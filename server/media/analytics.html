@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics - Funil de Vendas</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #0f0f0f; color: white; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: #1a1a1a; padding: 20px; border-radius: 10px; text-align: center; }
+        .stat-number { font-size: 2em; font-weight: bold; color: #00ff88; }
+        .funnel-section { background: #1a1a1a; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .funnel-step { display: flex; justify-content: space-between; align-items: center; padding: 10px; margin: 5px 0; background: #2a2a2a; border-radius: 5px; }
+        .step-name { flex: 2; }
+        .step-count { flex: 1; text-align: center; }
+        .step-rate { flex: 1; text-align: right; color: #00ff88; }
+        .dropoff { color: #ff4444; }
+        .recent-leads { background: #1a1a1a; padding: 20px; border-radius: 10px; }
+        .lead-item { padding: 10px; border-bottom: 1px solid #333; }
+        .completed { color: #00ff88; }
+        .active { color: #ffaa00; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Analytics - Funil de Vendas</h1>
+            <p>Monitoramento em tempo real dos leads</p>
+        </div>
+
+        <div class="stats-grid" id="statsGrid">
+            <!-- Preenchido via JavaScript -->
+        </div>
+
+        <div class="funnel-section">
+            <h2>📈 Funil de Conversão</h2>
+            <div id="funnelSteps">
+                <!-- Preenchido via JavaScript -->
+            </div>
+        </div>
+
+        <div class="funnel-section">
+            <h2>⚠️ Pontos de Abandono</h2>
+            <div id="dropoffPoints">
+                <!-- Preenchido via JavaScript -->
+            </div>
+        </div>
+
+        <div class="recent-leads">
+            <h2>👥 Últimos Leads</h2>
+            <div id="recentLeads">
+                <!-- Preenchido via JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadAnalytics() {
+            try {
+                const response = await fetch('/analytics');
+                const data = await response.json();
+                
+                updateStats(data);
+                updateFunnel(data);
+                updateDropoff(data);
+                updateRecentLeads(data);
+            } catch (error) {
+                console.error('Erro ao carregar analytics:', error);
+            }
+        }
+
+        function updateStats(data) {
+            const statsGrid = document.getElementById('statsGrid');
+            statsGrid.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-number">${data.overview.totalLeads}</div>
+                    <div>Total de Leads</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${data.overview.completedFunnel}</div>
+                    <div>Conversões</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${data.overview.completionRate}</div>
+                    <div>Taxa de Conversão</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${data.overview.currentActive}</div>
+                    <div>Ativos Agora</div>
+                </div>
+            `;
+        }
+
+        function updateFunnel(data) {
+            const funnelSteps = document.getElementById('funnelSteps');
+            let html = '';
+            
+            Object.entries(data.funnelData).forEach(([step, count]) => {
+                html += `
+                    <div class="funnel-step">
+                        <div class="step-name">${step}</div>
+                        <div class="step-count">${count} leads</div>
+                    </div>
+                `;
+            });
+            
+            funnelSteps.innerHTML = html;
+        }
+
+        function updateDropoff(data) {
+            const dropoffPoints = document.getElementById('dropoffPoints');
+            let html = '';
+            
+            Object.values(data.dropOffRates).forEach(dropoff => {
+                html += `
+                    <div class="funnel-step">
+                        <div class="step-name">${dropoff.from} → ${dropoff.to}</div>
+                        <div class="step-count">${dropoff.lost} perdidos</div>
+                        <div class="step-rate dropoff">${dropoff.dropoffRate}%</div>
+                    </div>
+                `;
+            });
+            
+            dropoffPoints.innerHTML = html;
+        }
+
+        function updateRecentLeads(data) {
+            const recentLeads = document.getElementById('recentLeads');
+            let html = '';
+            
+            data.recentSessions.forEach(lead => {
+                const status = lead.completed ? 'completed' : 'active';
+                const statusText = lead.completed ? '✅ Convertido' : '🟡 Em andamento';
+                
+                html += `
+                    <div class="lead-item">
+                        <strong>ID:</strong> ${lead.id.substring(0, 8)}... | 
+                        <strong>Cidade:</strong> ${lead.city} | 
+                        <strong>Status:</strong> <span class="${status}">${statusText}</span> |
+                        <strong>Último passo:</strong> ${lead.currentStep}
+                    </div>
+                `;
+            });
+            
+            recentLeads.innerHTML = html;
+        }
+
+        // Atualizar a cada 5 segundos
+        loadAnalytics();
+        setInterval(loadAnalytics, 5000);
+    </script>
+</body>
+</html>
