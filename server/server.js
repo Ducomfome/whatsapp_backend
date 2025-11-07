@@ -1,4 +1,4 @@
-// server.js (VERSÃO FINAL SEM DOTENV - PARA RENDER)
+// server.js (VERSÃO FINAL SEM DOTENV)
 
 const express = require('express');
 const fetch = require('node-fetch');
@@ -60,7 +60,7 @@ app.post('/gerar-pix', async (req, res) => {
     try {
         const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
         const paymentData = {
-            value: 1999, // R$ 19,99 em centavos
+            value: 1999,
             webhook_url: `https://gruposecreto-backend.onrender.com/webhook-pushinpay`
         };
 
@@ -85,11 +85,11 @@ app.post('/gerar-pix', async (req, res) => {
         
         console.log(`✅ PIX gerado com sucesso! ID: ${normalizedId}`);
 
-        // 🔥 MARCA AddToCart NO PIXEL (SERVER-SIDE)
+        // 🔥 MARCA AddToCart NO PIXEL
         await trackFacebookEvent('AddToCart', {
             custom_data: {
                 currency: 'BRL',
-                value: 19.99 // Valor correto em decimal
+                value: 19.99
             }
         });
 
@@ -105,7 +105,7 @@ app.post('/gerar-pix', async (req, res) => {
     }
 });
 
-// ROTA DO WEBHOOK - VERSÃO COM PIXEL
+// ROTA DO WEBHOOK
 app.post('/webhook-pushinpay', async (req, res) => {
     console.log("Webhook da PushinPay recebido!");
     
@@ -130,14 +130,12 @@ app.post('/webhook-pushinpay', async (req, res) => {
         if (webhookData.status === 'paid') {
             paymentStatus[normalizedId] = 'paid';
             console.log(`💰 PAGAMENTO CONFIRMADO: ${normalizedId}`);
-            console.log(`👤 Pagador: ${webhookData.payer_name}`);
-            console.log(`💳 Valor: R$ ${(webhookData.value / 100).toFixed(2)}`);
 
-            // 🔥🔥🔥 MARCA PURCHASE NO PIXEL (SERVER-SIDE) - 100% GARANTIDO
+            // 🔥🔥🔥 MARCA PURCHASE NO PIXEL
             await trackFacebookEvent('Purchase', {
                 custom_data: {
                     currency: 'BRL',
-                    value: 19.99, // Valor correto R$ 19,99
+                    value: 19.99,
                     transaction_id: normalizedId
                 }
             });
@@ -164,7 +162,7 @@ app.get('/check-status/:paymentId', (req, res) => {
     });
 });
 
-// ROTA EXTRA: Listar todos os pagamentos (para debug)
+// ROTA EXTRA: Listar todos os pagamentos
 app.get('/payments', (req, res) => {
     res.json({
         totalPayments: Object.keys(paymentStatus).length,
