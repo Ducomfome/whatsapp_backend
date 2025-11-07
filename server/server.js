@@ -1,4 +1,4 @@
-// server.js - VERSÃO COM ANALYTICS
+// server.js - VERSÃO COM ANALYTICS MAS SEM QUEBRAR O QUE JÁ FUNCIONA
 
 const express = require('express');
 const http = require('http');
@@ -21,9 +21,9 @@ const allowedOrigins = [
   'http://localhost:3000'
 ];
 
-// Banco de dados em memória (pra começar)
+// Banco de dados em memória (só pros analytics)
 const analyticsDB = {
-  sessions: {}, // Para dados detalhados
+  sessions: {},
   funnel: {
     START: 0,
     AWAITING_CITY: 0,
@@ -40,8 +40,7 @@ const analyticsDB = {
   },
   conversions: {
     totalLeads: 0,
-    completedFunnel: 0,
-    dropOffPoints: {}
+    completedFunnel: 0
   }
 };
 
@@ -58,33 +57,12 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'media')));
 
-// Rota para analytics
+// Rota para analytics (NOVA - não mexe nas existentes)
 app.get('/analytics', (req, res) => {
   const totalSessions = Object.keys(analyticsDB.sessions).length;
   const completedFunnel = analyticsDB.conversions.completedFunnel;
   const completionRate = totalSessions > 0 ? (completedFunnel / totalSessions * 100).toFixed(2) : 0;
   
-  // Calcular dropoff entre steps
-  const funnelSteps = Object.keys(analyticsDB.funnel);
-  const dropOffRates = {};
-  
-  for (let i = 0; i < funnelSteps.length - 1; i++) {
-    const currentStep = funnelSteps[i];
-    const nextStep = funnelSteps[i + 1];
-    const currentCount = analyticsDB.funnel[currentStep];
-    const nextCount = analyticsDB.funnel[nextStep];
-    
-    if (currentCount > 0) {
-      const dropoff = ((currentCount - nextCount) / currentCount * 100).toFixed(2);
-      dropOffRates[`${currentStep}_to_${nextStep}`] = {
-        from: currentStep,
-        to: nextStep,
-        dropoffRate: dropoff,
-        lost: currentCount - nextCount
-      };
-    }
-  }
-
   res.json({
     overview: {
       totalLeads: totalSessions,
@@ -93,35 +71,43 @@ app.get('/analytics', (req, res) => {
       currentActive: Object.keys(userSessions).length
     },
     funnelData: analyticsDB.funnel,
-    dropOffRates: dropOffRates,
-    recentSessions: Object.values(analyticsDB.sessions).slice(-10).reverse() // Últimos 10 leads
+    recentSessions: Object.values(analyticsDB.sessions).slice(-10).reverse()
   });
 });
 
-// Rota detalhada por lead
-app.get('/analytics/lead/:sessionId', (req, res) => {
-  const session = analyticsDB.sessions[req.params.sessionId];
-  if (!session) {
-    return res.status(404).json({ error: 'Lead não encontrado' });
+// SUAS ROTAS ORIGINAIS (não mudei nada aqui)
+app.get('/generate-image-with-city', async (req, res) => {
+  try {
+    const city = req.query.cidade || 'Sua Cidade';
+    const imagePath = path.join(__dirname, 'media', 'generated-image-1.png');
+    const fontPath = path.join(__dirname, 'media', 'fonts', 'open-sans-64-black.fnt');
+    const [font, image] = await Promise.all([Jimp.loadFont(fontPath), Jimp.read(imagePath)]);
+    image.print(font, 198, 125, { text: `${city}`, alignmentX: Jimp.HORIZONTAL_ALIGN_LEFT }, image.bitmap.width, image.bitmap.height);
+    const buffer = await image.getBufferAsync(Jimp.MIME_PNG);
+    res.set('Content-Type', Jimp.MIME_PNG);
+    res.send(buffer);
+  } catch (error) {
+    console.error("ERRO AO GERAR IMAGEM:", error);
+    res.status(500).send("Erro interno ao gerar imagem: " + error.message);
   }
-  res.json(session);
 });
 
-// Rota para limpar analytics (opcional)
-app.delete('/analytics/reset', (req, res) => {
-  Object.keys(analyticsDB.funnel).forEach(key => {
-    analyticsDB.funnel[key] = 0;
-  });
-  analyticsDB.conversions = {
-    totalLeads: 0,
-    completedFunnel: 0,
-    dropOffPoints: {}
-  };
-  analyticsDB.sessions = {};
-  res.json({ message: 'Analytics resetados com sucesso' });
+app.post('/create-payment', async (req, res) => {
+  if (PUSHPAY_API_KEY === "sua_chave_secreta_da_api_do_pushpay_aqui") {
+    return res.status(400).json({ error: "A chave da API não foi configurada no servidor." });
+  }
+  try {
+    const paymentData = { value: 1999, description: "Acesso ao Grupo VIP" };
+    const response = await axios.post('https://api.pushinpay.com.br/v1/pix/charges', paymentData, {
+      headers: { 'Authorization': `Bearer ${PUSHPAY_API_KEY}`, 'Content-Type': 'application/json' }
+    });
+    const pixData = { qrCode: response.data.qr_code_base64, copiaECola: response.data.copia_e_cola };
+    res.json(pixData);
+  } catch (error) {
+    console.error("ERRO AO CRIAR PAGAMENTO:", error.response ? error.response.data : error.message);
+    res.status(500).json({ error: "Não foi possível gerar o pagamento." });
+  }
 });
-
-// ... (suas rotas existentes de generate-image-with-city e create-payment permanecem iguais)
 
 const io = new Server(server, {
   cors: {
@@ -132,7 +118,7 @@ const io = new Server(server, {
 
 const userSessions = {};
 
-// Função para registrar evento no analytics
+// Função para analytics (NOVA)
 function trackEvent(socketId, eventType, data = {}) {
   if (!analyticsDB.sessions[socketId]) {
     analyticsDB.sessions[socketId] = {
@@ -162,12 +148,10 @@ function trackEvent(socketId, eventType, data = {}) {
     session.path.push(data.step);
     session.currentStep = data.step;
     
-    // Atualizar contagem do funil
     if (analyticsDB.funnel[data.step] !== undefined) {
       analyticsDB.funnel[data.step]++;
     }
     
-    // Marcar como completado se chegou no final
     if (data.step === 'OPEN_WHATSAPP') {
       session.completed = true;
       session.endTime = new Date().toISOString();
@@ -176,8 +160,21 @@ function trackEvent(socketId, eventType, data = {}) {
   }
 }
 
+// SUAS FUNÇÕES ORIGINAIS (não mudei nada aqui)
 async function getGeolocation(ip) {
-  // ... (seu código existente permanece igual)
+  const apis = [
+    { name: 'ipwhois.app', url: `https://ipwhois.app/json/${ip}`, getCity: (data) => data.success ? data.city : null },
+    { name: 'ip-api.com', url: `http://ip-api.com/json/${ip}?fields=status,message,city`, getCity: (data) => data.status === 'success' ? data.city : null },
+    { name: 'ipapi.co', url: `https://ipapi.co/${ip}/json/`, getCity: (data) => data.city }
+  ];
+  for (let api of apis) {
+    try {
+      const response = await axios.get(api.url);
+      const city = api.getCity(response.data);
+      if (city) { return city; }
+    } catch (error) {}
+  }
+  return null;
 }
 
 async function sendBotMessages(socket, stepKey) {
@@ -186,7 +183,7 @@ async function sendBotMessages(socket, stepKey) {
   const step = dialogue[stepKey];
   if (!step) return;
 
-  // Registrar mudança de step no analytics
+  // SÓ ADICIONEI ESSA LINHA PRA TRACKING
   trackEvent(socket.id, 'step_change', { 
     step: stepKey,
     ip: userState.ip,
@@ -228,39 +225,26 @@ async function sendBotMessages(socket, stepKey) {
 
 io.on('connection', async (socket) => {
   console.log(`✅ Usuário conectado: ${socket.id}`);
-  const userState = { 
-    city: 'São Paulo', 
-    conversationStep: 'START',
-    ip: ''
-  };
-  
+  const userState = { city: 'São Paulo', conversationStep: 'START' };
   const userIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
   const finalIp = userIp.split(',')[0].trim();
-  userState.ip = finalIp;
-  
   const detectedCity = await getGeolocation(finalIp);
   if (detectedCity) {
     userState.city = detectedCity;
   }
   userSessions[socket.id] = userState;
-  
-  // Registrar conexão inicial
+
+  // SÓ ADICIONEI ESSA LINHA PRA TRACKING
   trackEvent(socket.id, 'session_start', {
     ip: finalIp,
     city: userState.city
   });
-  
+
   sendBotMessages(socket, userState.conversationStep);
 
   socket.on('userMessage', (data) => {
     const userState = userSessions[socket.id];
     if (!userState) return;
-
-    // Registrar interação do usuário
-    trackEvent(socket.id, 'user_interaction', {
-      payload: data.payload,
-      step: userState.conversationStep
-    });
 
     const currentStep = dialogue[userState.conversationStep];
     if (!currentStep || !currentStep.response) return;
@@ -286,6 +270,7 @@ io.on('connection', async (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`❌ Usuário desconectado: ${socket.id}`);
+    // SÓ ADICIONEI ESSA LINHA PRA TRACKING
     trackEvent(socket.id, 'session_end', {
       step: userSessions[socket.id]?.conversationStep
     });
@@ -296,5 +281,4 @@ io.on('connection', async (socket) => {
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`🚀 Servidor BACKEND rodando na porta ${PORT}`);
-  console.log(`📊 Analytics disponível em: http://localhost:${PORT}/analytics`);
 });
