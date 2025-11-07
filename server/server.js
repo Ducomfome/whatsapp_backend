@@ -1,6 +1,5 @@
-// server.js (VERSÃO FINAL COM PIXEL FACEBOOK)
+// server.js (VERSÃO FINAL SEM DOTENV - PARA RENDER)
 
-require('dotenv').config();
 const express = require('express');
 const fetch = require('node-fetch');
 const path = require('path');
@@ -14,14 +13,16 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cors());
 
+// VARIÁVEIS DE AMBIENTE (Render Environment)
 const PUSHIN_TOKEN = process.env.PUSHIN_TOKEN;
+const FACEBOOK_ACCESS_TOKEN = process.env.FACEBOOK_ACCESS_TOKEN;
+const FACEBOOK_PIXEL_ID = '792797553335143';
+
 const paymentStatus = {};
 
 // ===========================================
 // CONFIGURAÇÃO DO PIXEL FACEBOOK (SERVER-SIDE)
 // ===========================================
-const FACEBOOK_PIXEL_ID = '792797553335143';
-const FACEBOOK_ACCESS_TOKEN = process.env.FACEBOOK_ACCESS_TOKEN;
 
 // Função para disparar evento no Facebook Pixel (Server-Side)
 async function trackFacebookEvent(eventName, parameters = {}) {
