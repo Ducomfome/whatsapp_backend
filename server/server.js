@@ -1,284 +1,190 @@
-// server.js - VERSÃO COM ANALYTICS MAS SEM QUEBRAR O QUE JÁ FUNCIONA
+// server.js (VERSÃO FINAL COM PIXEL FACEBOOK)
 
+require('dotenv').config();
 const express = require('express');
-const http = require('http');
+const fetch = require('node-fetch');
 const path = require('path');
-const { Server } = require("socket.io");
-const axios = require('axios');
 const cors = require('cors');
-const Jimp = require('jimp');
-const dialogue = require('./dialogue');
-const bodyParser = require('body-parser');
 
 const app = express();
-const server = http.createServer(app);
+const PORT = process.env.PORT || 3000;
 
-const PUSHPAY_API_KEY = "sua_chave_secreta_da_api_do_pushpay_aqui";
-const BASE_URL = 'https://whatsapp-backend-vott.onrender.com';
+// MIDDLEWARE
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+app.use(cors());
 
-const allowedOrigins = [
-  'https://whastappproibido.netlify.app',
-  'http://localhost:3000'
-];
+const PUSHIN_TOKEN = process.env.PUSHIN_TOKEN;
+const paymentStatus = {};
 
-// Banco de dados em memória (só pros analytics)
-const analyticsDB = {
-  sessions: {},
-  funnel: {
-    START: 0,
-    AWAITING_CITY: 0,
-    AWAITING_ROMANCE_CHOICE: 0,
-    NAUGHTY_PATH: 0,
-    CARING_PATH: 0,
-    POST_CHOICE_AUDIO: 0,
-    AWAITING_CONFIRM_JOIN: 0,
-    AWAITING_NO_OBJECTION: 0,
-    AWAITING_COMBINED: 0,
-    AWAITING_ENTER_CLUB: 0,
-    AWAITING_WANT_TO_ENTER: 0,
-    OPEN_WHATSAPP: 0
-  },
-  conversions: {
-    totalLeads: 0,
-    completedFunnel: 0
-  }
-};
+// ===========================================
+// CONFIGURAÇÃO DO PIXEL FACEBOOK (SERVER-SIDE)
+// ===========================================
+const FACEBOOK_PIXEL_ID = '792797553335143';
+const FACEBOOK_ACCESS_TOKEN = process.env.FACEBOOK_ACCESS_TOKEN;
 
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Acesso negado pelo CORS'));
-    }
-  }
-}));
-
-app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'media')));
-
-// Rota para analytics (NOVA - não mexe nas existentes)
-app.get('/analytics', (req, res) => {
-  const totalSessions = Object.keys(analyticsDB.sessions).length;
-  const completedFunnel = analyticsDB.conversions.completedFunnel;
-  const completionRate = totalSessions > 0 ? (completedFunnel / totalSessions * 100).toFixed(2) : 0;
-  
-  res.json({
-    overview: {
-      totalLeads: totalSessions,
-      completedFunnel: completedFunnel,
-      completionRate: `${completionRate}%`,
-      currentActive: Object.keys(userSessions).length
-    },
-    funnelData: analyticsDB.funnel,
-    recentSessions: Object.values(analyticsDB.sessions).slice(-10).reverse()
-  });
-});
-
-// SUAS ROTAS ORIGINAIS (não mudei nada aqui)
-app.get('/generate-image-with-city', async (req, res) => {
-  try {
-    const city = req.query.cidade || 'Sua Cidade';
-    const imagePath = path.join(__dirname, 'media', 'generated-image-1.png');
-    const fontPath = path.join(__dirname, 'media', 'fonts', 'open-sans-64-black.fnt');
-    const [font, image] = await Promise.all([Jimp.loadFont(fontPath), Jimp.read(imagePath)]);
-    image.print(font, 198, 125, { text: `${city}`, alignmentX: Jimp.HORIZONTAL_ALIGN_LEFT }, image.bitmap.width, image.bitmap.height);
-    const buffer = await image.getBufferAsync(Jimp.MIME_PNG);
-    res.set('Content-Type', Jimp.MIME_PNG);
-    res.send(buffer);
-  } catch (error) {
-    console.error("ERRO AO GERAR IMAGEM:", error);
-    res.status(500).send("Erro interno ao gerar imagem: " + error.message);
-  }
-});
-
-app.post('/create-payment', async (req, res) => {
-  if (PUSHPAY_API_KEY === "sua_chave_secreta_da_api_do_pushpay_aqui") {
-    return res.status(400).json({ error: "A chave da API não foi configurada no servidor." });
-  }
-  try {
-    const paymentData = { value: 1999, description: "Acesso ao Grupo VIP" };
-    const response = await axios.post('https://api.pushinpay.com.br/v1/pix/charges', paymentData, {
-      headers: { 'Authorization': `Bearer ${PUSHPAY_API_KEY}`, 'Content-Type': 'application/json' }
-    });
-    const pixData = { qrCode: response.data.qr_code_base64, copiaECola: response.data.copia_e_cola };
-    res.json(pixData);
-  } catch (error) {
-    console.error("ERRO AO CRIAR PAGAMENTO:", error.response ? error.response.data : error.message);
-    res.status(500).json({ error: "Não foi possível gerar o pagamento." });
-  }
-});
-
-const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"]
-  }
-});
-
-const userSessions = {};
-
-// Função para analytics (NOVA)
-function trackEvent(socketId, eventType, data = {}) {
-  if (!analyticsDB.sessions[socketId]) {
-    analyticsDB.sessions[socketId] = {
-      id: socketId,
-      startTime: new Date().toISOString(),
-      ip: data.ip || '',
-      city: data.city || '',
-      events: [],
-      path: [],
-      currentStep: 'START',
-      completed: false
-    };
-    analyticsDB.conversions.totalLeads++;
-  }
-  
-  const session = analyticsDB.sessions[socketId];
-  const event = {
-    type: eventType,
-    step: data.step || session.currentStep,
-    timestamp: new Date().toISOString(),
-    data: data
-  };
-  
-  session.events.push(event);
-  
-  if (eventType === 'step_change') {
-    session.path.push(data.step);
-    session.currentStep = data.step;
-    
-    if (analyticsDB.funnel[data.step] !== undefined) {
-      analyticsDB.funnel[data.step]++;
-    }
-    
-    if (data.step === 'OPEN_WHATSAPP') {
-      session.completed = true;
-      session.endTime = new Date().toISOString();
-      analyticsDB.conversions.completedFunnel++;
-    }
-  }
-}
-
-// SUAS FUNÇÕES ORIGINAIS (não mudei nada aqui)
-async function getGeolocation(ip) {
-  const apis = [
-    { name: 'ipwhois.app', url: `https://ipwhois.app/json/${ip}`, getCity: (data) => data.success ? data.city : null },
-    { name: 'ip-api.com', url: `http://ip-api.com/json/${ip}?fields=status,message,city`, getCity: (data) => data.status === 'success' ? data.city : null },
-    { name: 'ipapi.co', url: `https://ipapi.co/${ip}/json/`, getCity: (data) => data.city }
-  ];
-  for (let api of apis) {
+// Função para disparar evento no Facebook Pixel (Server-Side)
+async function trackFacebookEvent(eventName, parameters = {}) {
     try {
-      const response = await axios.get(api.url);
-      const city = api.getCity(response.data);
-      if (city) { return city; }
-    } catch (error) {}
-  }
-  return null;
+        const response = await fetch(`https://graph.facebook.com/v17.0/${FACEBOOK_PIXEL_ID}/events`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                data: [{
+                    event_name: eventName,
+                    event_time: Math.floor(Date.now() / 1000),
+                    action_source: "website",
+                    user_data: {
+                        client_ip_address: parameters.ip || "0.0.0.0",
+                        client_user_agent: parameters.user_agent || "unknown"
+                    },
+                    custom_data: parameters.custom_data || {}
+                }],
+                access_token: FACEBOOK_ACCESS_TOKEN
+            })
+        });
+
+        const result = await response.json();
+        console.log(`✅ Facebook Pixel (${eventName}):`, result);
+        return result;
+    } catch (error) {
+        console.error(`❌ Erro no Facebook Pixel (${eventName}):`, error.message);
+    }
 }
 
-async function sendBotMessages(socket, stepKey) {
-  const userState = userSessions[socket.id];
-  if (!userState) return;
-  const step = dialogue[stepKey];
-  if (!step) return;
+// ROTA PARA GERAR O PIX
+app.post('/gerar-pix', async (req, res) => {
+    try {
+        const apiUrl = 'https://api.pushinpay.com.br/api/pix/cashIn';
+        const paymentData = {
+            value: 1999, // R$ 19,99 em centavos
+            webhook_url: `https://gruposecreto-backend.onrender.com/webhook-pushinpay`
+        };
 
-  // SÓ ADICIONEI ESSA LINHA PRA TRACKING
-  trackEvent(socket.id, 'step_change', { 
-    step: stepKey,
-    ip: userState.ip,
-    city: userState.city
-  });
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${PUSHIN_TOKEN}`
+            },
+            body: JSON.stringify(paymentData)
+        });
 
-  if (step.action && step.action.type === 'redirect') {
-    socket.emit('redirectToURL', { url: step.action.url });
-    return;
-  }
+        const data = await response.json();
+        
+        if (!response.ok || !data.id) {
+            console.error('ERRO na API PushinPay:', data);
+            throw new Error(data.message || 'Resposta inválida da API');
+        }
 
-  socket.emit('setUI', { inputEnabled: false, buttons: [] });
-  for (const message of step.messages) {
-    const status = message.type === 'audio' ? 'gravando áudio...' : 'digitando...';
-    socket.emit('botStatus', { status });
-    await new Promise(resolve => setTimeout(resolve, message.delay || 1000));
-    let messageToSend = { ...message };
-    if (messageToSend.type === 'text' && messageToSend.content.includes('{{city}}')) {
-      messageToSend.content = messageToSend.content.replace('{{city}}', userState.city);
-    } else if (messageToSend.type === 'image_with_location') {
-      const city = encodeURIComponent(userState.city);
-      messageToSend.type = 'image';
-      messageToSend.content = `${BASE_URL}/generate-image-with-city?cidade=${city}`;
+        const normalizedId = data.id.toLowerCase();
+        paymentStatus[normalizedId] = "created";
+        
+        console.log(`✅ PIX gerado com sucesso! ID: ${normalizedId}`);
+
+        // 🔥 MARCA AddToCart NO PIXEL (SERVER-SIDE)
+        await trackFacebookEvent('AddToCart', {
+            custom_data: {
+                currency: 'BRL',
+                value: 19.99 // Valor correto em decimal
+            }
+        });
+
+        res.json({
+            paymentId: normalizedId,
+            qrCodeBase64: data.qr_code_base64,
+            copiaECola: data.qr_code
+        });
+
+    } catch (error) {
+        console.error('Erro ao gerar PIX:', error.message);
+        res.status(500).json({ error: 'Não foi possível gerar o PIX.' });
     }
-    socket.emit('botMessage', messageToSend);
-    socket.emit('botStatus', { status: 'online' });
-  }
-  if (step.response) {
-    if (step.response.type === 'text') {
-      socket.emit('setUI', { inputEnabled: true, buttons: [] });
-    } else if (step.response.type === 'buttons') {
-      socket.emit('setUI', { inputEnabled: false, buttons: step.response.options });
-    } else if (step.response.type === 'continue') {
-      userState.conversationStep = step.response.next;
-      sendBotMessages(socket, userState.conversationStep);
-    }
-  }
-}
-
-io.on('connection', async (socket) => {
-  console.log(`✅ Usuário conectado: ${socket.id}`);
-  const userState = { city: 'São Paulo', conversationStep: 'START' };
-  const userIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
-  const finalIp = userIp.split(',')[0].trim();
-  const detectedCity = await getGeolocation(finalIp);
-  if (detectedCity) {
-    userState.city = detectedCity;
-  }
-  userSessions[socket.id] = userState;
-
-  // SÓ ADICIONEI ESSA LINHA PRA TRACKING
-  trackEvent(socket.id, 'session_start', {
-    ip: finalIp,
-    city: userState.city
-  });
-
-  sendBotMessages(socket, userState.conversationStep);
-
-  socket.on('userMessage', (data) => {
-    const userState = userSessions[socket.id];
-    if (!userState) return;
-
-    const currentStep = dialogue[userState.conversationStep];
-    if (!currentStep || !currentStep.response) return;
-
-    let nextStepKey;
-    if (currentStep.response.type === 'buttons') {
-      const option = currentStep.response.options.find(o => o.payload === data.payload);
-      if (option) {
-        nextStepKey = option.next;
-      }
-    } else if (currentStep.response.type === 'text') {
-      nextStepKey = currentStep.response.next;
-    }
-
-    if (nextStepKey) {
-      userState.conversationStep = nextStepKey;
-      console.log(`🧠 Bot avançou para: ${nextStepKey} via payload: ${data.payload}`);
-      sendBotMessages(socket, nextStepKey);
-    } else {
-      console.log(`❌ Payload não encontrado. Recebido:`, data);
-    }
-  });
-
-  socket.on('disconnect', () => {
-    console.log(`❌ Usuário desconectado: ${socket.id}`);
-    // SÓ ADICIONEI ESSA LINHA PRA TRACKING
-    trackEvent(socket.id, 'session_end', {
-      step: userSessions[socket.id]?.conversationStep
-    });
-    delete userSessions[socket.id];
-  });
 });
 
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`🚀 Servidor BACKEND rodando na porta ${PORT}`);
+// ROTA DO WEBHOOK - VERSÃO COM PIXEL
+app.post('/webhook-pushinpay', async (req, res) => {
+    console.log("Webhook da PushinPay recebido!");
+    
+    let webhookData = req.body;
+    console.log("Dados do Webhook (bruto):", webhookData);
+
+    if (typeof webhookData === 'string') {
+        try {
+            webhookData = JSON.parse(webhookData);
+        } catch (e) {
+            console.error("Erro no parse JSON:", e.message);
+        }
+    }
+
+    console.log("Dados do Webhook (processado):", webhookData);
+
+    if (webhookData && webhookData.id) {
+        const normalizedId = webhookData.id.toLowerCase();
+        
+        console.log(`🎉 Webhook recebido - ID: ${normalizedId}, Status: ${webhookData.status}`);
+        
+        if (webhookData.status === 'paid') {
+            paymentStatus[normalizedId] = 'paid';
+            console.log(`💰 PAGAMENTO CONFIRMADO: ${normalizedId}`);
+            console.log(`👤 Pagador: ${webhookData.payer_name}`);
+            console.log(`💳 Valor: R$ ${(webhookData.value / 100).toFixed(2)}`);
+
+            // 🔥🔥🔥 MARCA PURCHASE NO PIXEL (SERVER-SIDE) - 100% GARANTIDO
+            await trackFacebookEvent('Purchase', {
+                custom_data: {
+                    currency: 'BRL',
+                    value: 19.99, // Valor correto R$ 19,99
+                    transaction_id: normalizedId
+                }
+            });
+            
+            console.log(`🎯 Purchase disparado para: ${normalizedId}`);
+        } else {
+            paymentStatus[normalizedId] = webhookData.status;
+            console.log(`Status atualizado: ${normalizedId} -> ${webhookData.status}`);
+        }
+    }
+
+    res.status(200).json({ success: true, message: "Webhook processado" });
+});
+
+// ROTA DE VERIFICAÇÃO DE STATUS
+app.get('/check-status/:paymentId', (req, res) => {
+    const paymentId = req.params.paymentId.toLowerCase();
+    const status = paymentStatus[paymentId] || 'not_found';
+    
+    res.json({ 
+        paymentId,
+        status: status,
+        message: status === 'paid' ? 'Pagamento confirmado!' : 'Aguardando pagamento'
+    });
+});
+
+// ROTA EXTRA: Listar todos os pagamentos (para debug)
+app.get('/payments', (req, res) => {
+    res.json({
+        totalPayments: Object.keys(paymentStatus).length,
+        payments: paymentStatus
+    });
+});
+
+// Health check
+app.get('/', (req, res) => {
+    res.json({ 
+        message: 'Sistema de PIX funcionando!',
+        endpoints: {
+            gerarPix: 'POST /gerar-pix',
+            webhook: 'POST /webhook-pushinpay',
+            checkStatus: 'GET /check-status/:paymentId',
+            listPayments: 'GET /payments'
+        }
+    });
+});
+
+app.listen(PORT, () => {
+    console.log(`🚀 Servidor rodando na porta ${PORT}`);
+    console.log(`🎯 Facebook Pixel configurado: ${FACEBOOK_PIXEL_ID}`);
 });
