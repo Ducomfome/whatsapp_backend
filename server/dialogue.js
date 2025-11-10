@@ -107,7 +107,7 @@ const dialogue = {
   OPEN_WHATSAPP: {
     action: {
       type: 'redirect',
-      url: 'https://gruposecretoproibido.netlify.app/'
+      url: 'https://gruposecreto69.netlify.app/'
     }
   }
 };
