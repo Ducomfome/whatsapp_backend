@@ -4,7 +4,7 @@ const BASE_URL = 'https://whatsapp-backend-vott.onrender.com';
 
 const dialogue = {
   START: {
-    messages: [ { type: 'audio', content: BASE_URL + '/audios/audio01.mp3', delay: 2000 } ],
+    messages: [ { type: 'audio', content: BASE_URL + '/audios/audio01.mp3', delay: 1000 } ],
     response: { type: 'text', next: 'AWAITING_CITY' }
   },
   AWAITING_CITY: {
