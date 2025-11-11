@@ -1,4 +1,4 @@
-// dialogue.js - VERSÃO FINAL COM PAYLOAD
+// dialogue.js - VERSÃO FINAL CORRIGIDA
 
 const BASE_URL = 'https://whatsapp-backend-vott.onrender.com';
 
@@ -83,7 +83,8 @@ const dialogue = {
     ],
     response: {
       type: 'buttons',
-      options: [ { text: "ENTRAR NO CLUBE SECRETO 🔥", payload: "ENTER_CLUB", next: 'AWAITING_WANT_TO_ENTER' } ]
+      // AQUI ESTAVA O ERRO, AGORA ESTÁ CORRIGIDO:
+      options: [ { text: "ENTRAR NO CLUBE SECRETO 🔥", payload: "ENTER_CLUB", next: 'OPEN_WHATSAPP' } ] // <-- CORRIGIDO AQUI
     }
   },
   OPEN_WHATSAPP: {
