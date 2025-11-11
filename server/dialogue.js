@@ -52,12 +52,8 @@ const dialogue = {
     messages: [
       { type: 'audio', content: BASE_URL + '/audios/audio09.mp3', delay: 13000 },
       { type: 'audio', content: BASE_URL + '/audios/audio10.mp3', delay: 6000 },
-      { type: 'audio', content: BASE_URL + '/audios/audio11.mp3', delay: 9000 },
-      { type: 'audio', content: BASE_URL + '/audios/audio12.mp3', delay: 13000 },
       { type: 'audio', content: BASE_URL + '/audios/audio13.mp3', delay: 3000 },
-      { type: 'image', content: 'https://midia.jdfnu287h7dujn2jndjsifd.com/qmrjn8qo44cqk2n2k2dbww6n.jpeg', delay: 2500 },
       { type: 'image', content: 'https://midia.jdfnu287h7dujn2jndjsifd.com/oi6gtpxvamkpw9g2661pohgv.jpeg', delay: 2500 },
-      { type: 'audio', content: BASE_URL + '/audios/audio14.mp3', delay: 28000 }
     ],
     response: {
       type: 'buttons',
@@ -82,26 +78,12 @@ const dialogue = {
       { type: 'gif', content: 'https://midia.jdfnu287h7dujn2jndjsifd.com/ohjlvxht3us81l3l5c6sckxx.gif', delay: 3000 },
       { type: 'audio', content: BASE_URL + '/audios/audio20.mp3', delay: 8000 },
       { type: 'audio', content: BASE_URL + '/audios/audio21.mp3', delay: 9000 },
-      { type: 'video', content: 'https://midia.jdfnu287h7dujn2jndjsifd.com/wun2i87362bus82913.mp4', delay: 2500 },
-      { type: 'text', content: 'Olha o FOGOOO dessas meninas meu deus kkkkkkkkk', delay: 5500 },
       { type: 'audio', content: BASE_URL + '/audios/audio22.mp3', delay: 4000 },
       { type: 'audio', content: BASE_URL + '/audios/audio23.mp3', delay: 11000 }
     ],
     response: {
       type: 'buttons',
       options: [ { text: "ENTRAR NO CLUBE SECRETO 🔥", payload: "ENTER_CLUB", next: 'AWAITING_WANT_TO_ENTER' } ]
-    }
-  },
-  AWAITING_WANT_TO_ENTER: {
-    messages: [
-      { type: 'text', content: 'Eu aposto que você vai adorar amor... não vai se arrepender 😈😏', delay: 2500 },
-      { type: 'audio', content: BASE_URL + '/audios/audio24.mp3', delay: 2000 },
-      { type: 'audio', content: BASE_URL + '/audios/audio25.mp3', delay: 8000 },
-      { type: 'audio', content: BASE_URL + '/audios/audio26.mp3', delay: 20000 }
-    ],
-    response: {
-      type: 'buttons',
-      options: [ { text: "QUERO ENTRAR ❤️", payload: "FINAL_CONFIRM_ENTRY", next: 'OPEN_WHATSAPP' } ]
     }
   },
   OPEN_WHATSAPP: {
